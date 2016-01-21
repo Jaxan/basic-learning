@@ -62,13 +62,14 @@ public class Main {
 	private static final InetAddress socketIp = InetAddress.getLoopbackAddress();
 	private static final int socketPort = 7890;
 	private static final boolean printNewLineAfterEveryInput = true; // print newlines in the socket connection
-	private static final String resetCmd = "RESET"; // the command to send over socket to reset sut
+	private static final String resetCmd = "reset"; // the command to send over socket to reset sut
 	
 	//*******************//
  	// Learning settings //
 	//*******************//
 	// file for writing the resulting .dot-file and .pdf-file (extensions are added automatically)
-	private static final String OUTPUT_FILENAME = "learnedModel";
+	private static final String FINAL_MODEL_FILENAME = "learnedModel",
+								INTERMEDIATE_HYPOTHESIS_FILENAME = "hypothesis";
 	// the learning and testing algorithms. LStar is the basic algorithm, TTT performs much faster
 	// but is a bit more inaccurate and produces more intermediate hypotheses, so test well)
 	private static final LearningMethod learningAlgorithm = LearningMethod.LStar;
@@ -86,7 +87,7 @@ public class Main {
 	private static final boolean runControlledExperiment = true;
 	// For controlled experiments only: store every hypotheses as a file. Useful for 'debugging'
 	// if the learner does not terminate (hint: the TTT-algorithm produces many hypotheses).
-	private static final boolean saveAllHypotheses = false;
+	private static final boolean saveAllHypotheses = true;
 	
 	public static void main(String [] args) throws IOException {
 		// Load the actual SUL-class, depending on which SUL-type is set at the top of this file
@@ -175,7 +176,7 @@ public class Main {
 		MealyExperiment<String, String> experiment = new MealyExperiment<String, String>(learner, eqOracle, alphabet);
 		experiment.run();
 		System.out.println("Ran " + experiment.getRounds().getCount() + " rounds");
-		produceOutput(OUTPUT_FILENAME, experiment.getFinalHypothesis(), alphabet, true);
+		produceOutput(FINAL_MODEL_FILENAME, experiment.getFinalHypothesis(), alphabet, true);
 	}
 	
 	/**
@@ -194,54 +195,59 @@ public class Main {
 			Counter nrSymbols, Counter nrResets,
 			Alphabet<String> alphabet) throws IOException {
 		
-		// prepare some counters for printing statistics
-		int stage = 0;
-		long lastNrResetsValue = 0, lastNrSymbolsValue = 0;
-		
-		// start the actual learning
-		learner.startLearning();
-		
-		while(true) {
-			// store hypothesis as file
-			if(saveAllHypotheses) {
-				String outputFilename = "hyp." + stage + ".obf.dot";
-				PrintWriter output = new PrintWriter(outputFilename);
-				produceOutput(outputFilename, learner.getHypothesisModel(), alphabet, false);
-				output.close();
+		try {
+			// prepare some counters for printing statistics
+			int stage = 0;
+			long lastNrResetsValue = 0, lastNrSymbolsValue = 0;
+			
+			// start the actual learning
+			learner.startLearning();
+			
+			while(true) {
+				// store hypothesis as file
+				if(saveAllHypotheses) {
+					String outputFilename = INTERMEDIATE_HYPOTHESIS_FILENAME + stage;
+					produceOutput(outputFilename, learner.getHypothesisModel(), alphabet, false);
+					System.out.println("model size" + learner.getHypothesisModel().getStates().size());
+				}
+	
+				// Print statistics
+				System.out.println(stage + ": " + Calendar.getInstance().getTime());
+				// Log number of queries/symbols
+				System.out.println("Hypothesis size: " + learner.getHypothesisModel().size() + " states");
+				long roundResets = nrResets.getCount() - lastNrResetsValue, roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
+				System.out.println("learning queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
+						+ "(" + roundResets + "/" + roundSymbols + " this learning round)");
+				lastNrResetsValue = nrResets.getCount();
+				lastNrSymbolsValue = nrSymbols.getCount();
+				
+				// Search for CE
+				DefaultQuery<String, Word<String>> ce = eqOracle.findCounterExample(learner.getHypothesisModel(), alphabet);
+				
+				// Log number of queries/symbols
+				roundResets = nrResets.getCount() - lastNrResetsValue;
+				roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
+				System.out.println("testing queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
+						+ "(" + roundResets + "/" + roundSymbols + " this testing round)");
+				lastNrResetsValue = nrResets.getCount();
+				lastNrSymbolsValue = nrSymbols.getCount();
+				
+				if(ce == null) {
+					// No counterexample found, stop learning
+					System.out.println("\nFinished learning!");
+					produceOutput(FINAL_MODEL_FILENAME, learner.getHypothesisModel(), alphabet, true);
+					break;
+				} else {
+					// Counterexample found, rinse and repeat
+					System.out.println();
+					stage++;
+					learner.refineHypothesis(ce);
+				}
 			}
-
-			// Print statistics
-			System.out.println(stage + ": " + Calendar.getInstance().getTime());
-			// Log number of queries/symbols
-			System.out.println("Hypothesis size: " + learner.getHypothesisModel().size() + " states");
-			long roundResets = nrResets.getCount() - lastNrResetsValue, roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
-			System.out.println("learning queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
-					+ "(" + roundResets + "/" + roundSymbols + " this learning round)");
-			lastNrResetsValue = nrResets.getCount();
-			lastNrSymbolsValue = nrSymbols.getCount();
-			
-			// Search for CE
-			DefaultQuery<String, Word<String>> ce = eqOracle.findCounterExample(learner.getHypothesisModel(), alphabet);
-			
-			// Log number of queries/symbols
-			roundResets = nrResets.getCount() - lastNrResetsValue;
-			roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
-			System.out.println("testing queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
-					+ "(" + roundResets + "/" + roundSymbols + " this testing round)");
-			lastNrResetsValue = nrResets.getCount();
-			lastNrSymbolsValue = nrSymbols.getCount();
-			
-			if(ce == null) {
-				// No counterexample found, stop learning
-				System.out.println("\nFinished learning!");
-				produceOutput(OUTPUT_FILENAME, learner.getHypothesisModel(), alphabet, true);
-				break;
-			} else {
-				// Counterexample found, rinse and repeat
-				System.out.println();
-				stage++;
-				learner.refineHypothesis(ce);
-			}
+		} catch (Exception e) {
+			String errorHypName = "hyp.before.crash.dot";
+			produceOutput(errorHypName, learner.getHypothesisModel(), inputAlphabet, true);
+			throw e;
 		}
 	}
 	
@@ -255,14 +261,16 @@ public class Main {
 	 * @throws IOException
 	 */
 	public static void produceOutput(String fileName, MealyMachine<?,String,?,String> model, Alphabet<String> alphabet, boolean verboseError) throws FileNotFoundException, IOException {
-		GraphDOT.write(model, alphabet, new PrintWriter(OUTPUT_FILENAME + ".dot"));
+		PrintWriter dotWriter = new PrintWriter(fileName + ".dot");
+		GraphDOT.write(model, alphabet, dotWriter);
 		try {
-			DOT.runDOT(new File(OUTPUT_FILENAME + ".dot"), "pdf", new File(OUTPUT_FILENAME + ".pdf"));
+			DOT.runDOT(new File(fileName + ".dot"), "pdf", new File(fileName + ".pdf"));
 		} catch (Exception e) {
 			if (verboseError) {
 				System.err.println("Warning: Install graphviz to convert dot-files to PDF");
 				System.err.println(e.getMessage());
 			}
 		}
+		dotWriter.close();
 	}
 }
