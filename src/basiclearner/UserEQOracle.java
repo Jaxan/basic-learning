@@ -1,14 +1,11 @@
-package learner;
+package basiclearner;
 
 import de.learnlib.api.EquivalenceOracle;
 import de.learnlib.api.SUL;
-import de.learnlib.eqtests.basic.SampleSetEQOracle;
 import de.learnlib.oracles.DefaultQuery;
-import net.automatalib.automata.concepts.SuffixOutput;
 import net.automatalib.automata.transout.MealyMachine;
 import net.automatalib.words.Word;
 
-import javax.annotation.Nullable;
 import java.util.*;
 
 /**

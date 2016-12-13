@@ -1,4 +1,4 @@
-package learner;
+package basiclearner;
 
 import net.automatalib.words.Word;
 

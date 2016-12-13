@@ -1,4 +1,4 @@
-package learner;
+package basiclearner;
 
 import de.learnlib.api.SUL;
 import de.learnlib.api.SULException;
