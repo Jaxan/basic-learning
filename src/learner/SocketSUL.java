@@ -28,7 +28,7 @@ public class SocketSUL implements SUL<String, String>, AutoCloseable {
 	
 	/**
 	 * Socket-interface for SUTs. Connects to a SUT (or test-adapter)
-	 * @param ip the ip-address
+	 * @param ip the ip-address, for example InetAddress.getLoopbackAddress() for localhost
 	 * @param port the tcp-port
 	 * @param extraNewLine whether to print a newline after every input to the SUT
 	 * @param resetCmd the command to send for resetting the SUT

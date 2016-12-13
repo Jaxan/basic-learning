@@ -4,14 +4,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.InetAddress;
-import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Random;
 
 import net.automatalib.automata.transout.MealyMachine;
 import net.automatalib.commons.dotutil.DOT;
-import net.automatalib.graphs.concepts.GraphViewable;
 import net.automatalib.util.graphs.dot.GraphDOT;
 import net.automatalib.words.Alphabet;
 import net.automatalib.words.Word;
@@ -41,127 +39,104 @@ import de.learnlib.oracles.SymbolCounterSUL;
 import de.learnlib.statistics.Counter;
 
 /**
- * General learning testing framework. The most important parameters are the input alphabet and the SUL (The
- * first two static attributes). Other settings can also be configured.
+ * General learning testing framework. All basic settings are at the top of this file and can be configured
+ * by hard-coding or by simply changing them from your own code.
  * 
  * Based on the learner experiment setup of Joshua Moerman, https://gitlab.science.ru.nl/moerman/Learnlib-Experiments
  * 
  * @author Ramon Janssen
  */
 public class Main {
-	//*****************//
- 	// SUL information //
-	//*****************//
-	// Defines the input alphabet, adapt for your socket (you can even use other types than string, if you 
-	// change the generic-values, e.g. make your SUL of type SUL<Integer, Float> for int-input and float-output
-	private static final Alphabet<String> inputAlphabet = new SimpleAlphabet<String>(ImmutableSet.of("a", "b", "c"));	
-	// There are two SULs predefined, an example (see ExampleSul.java) and a socket SUL which connects to the SUL over socket
-	private static final SULType sulType = SULType.Example;
-	public enum SULType { Example, Socket }
-	// For SULs over socket, the socket address/port can be set here
-	private static final InetAddress socketIp = InetAddress.getLoopbackAddress();
-	private static final int socketPort = 7890;
-	private static final boolean printNewLineAfterEveryInput = true; // print newlines in the socket connection
-	private static final String resetCmd = "reset"; // the command to send over socket to reset sut
-	
-	//*******************//
- 	// Learning settings //
-	//*******************//
-	// file for writing the resulting .dot-file and .pdf-file (extensions are added automatically)
-	private static final String FINAL_MODEL_FILENAME = "learnedModel",
-								INTERMEDIATE_HYPOTHESIS_FILENAME = "hypothesis";
-	// the learning and testing algorithms. LStar is the basic algorithm, TTT performs much faster
-	// but is a bit more inaccurate and produces more intermediate hypotheses, so test well)
-	private static final LearningMethod learningAlgorithm = LearningMethod.LStar;
-	public enum LearningMethod { LStar, RivestSchapire, TTT, KearnsVazirani }
-	// Random walk is the simplest, but performs badly on large models: the chance of hitting a
-	// erroneous long trace is very small
-	private static final TestingMethod testMethod = TestingMethod.RandomWalk;
-	public enum TestingMethod { RandomWalk, WMethod, WpMethod }
-	// for random walk, the chance to do a reset after an input and the number of
-	// inputs to test before accepting a hypothesis
-	private static final double chanceOfResetting = 0.1; 
-	private static final int numberOfSymbols = 100;
-	// Simple experiments produce very little feedback, controlled produces feedback after
-	// every hypotheses and are better suited to adjust by programming
-	private static final boolean runControlledExperiment = true;
+	//*******************************//
+ 	// Learning settings (hardcoded) //
+	//*******************************//
+	// name to give to the resulting .dot-file and .pdf-file (extensions are added automatically)
+	public static String
+			FINAL_MODEL_FILENAME = "learnedModel",
+			INTERMEDIATE_HYPOTHESIS_FILENAME = "hypothesis";
 	// For controlled experiments only: store every hypotheses as a file. Useful for 'debugging'
 	// if the learner does not terminate (hint: the TTT-algorithm produces many hypotheses).
-	private static final boolean saveAllHypotheses = true;
-	
-	public static void main(String [] args) throws IOException {
-		// Load the actual SUL-class, depending on which SUL-type is set at the top of this file
-		// You can also program an own SUL-class if you extend SUL<String,String> (or SUL<S,T> in
-		// general, with S and T the input and output types - you'll have to change some of the
-		// code below)
-		SUL<String,String> sul;
-		switch (sulType) {
-		case Example: 
-			sul = new ExampleSUL();
-			break;
-		case Socket:
-			sul = new SocketSUL(socketIp, socketPort, printNewLineAfterEveryInput, resetCmd);
-			break;
-		default:
-			throw new RuntimeException("No SUL-type defined");
-		}
-		
-		// Wrap the SUL in a detector for non-determinism
-		sul = new NonDeterminismCheckingSUL<String,String>(sul);
-		// Wrap the SUL in counters for symbols/resets, so that we can record some statistics
-		SymbolCounterSUL<String, String> symbolCounterSul = new SymbolCounterSUL<>("symbol counter", sul);
-		ResetCounterSUL<String, String> resetCounterSul = new ResetCounterSUL<>("reset counter", symbolCounterSul);
-		Counter nrSymbols = symbolCounterSul.getStatisticalData(), nrResets = resetCounterSul.getStatisticalData();
-		// we should use the sul only through those wrappers
-		sul = resetCounterSul;
-		// Most testing/learning-algorithms want a membership-oracle instead of a SUL directly
-		MealyMembershipOracle<String,String> sulOracle = new SULOracle<>(sul);
-		
-		// Choosing an equivalence oracle
-		EquivalenceOracle<MealyMachine<?, String, ?, String>, String, Word<String>> eqOracle = null;
-		switch (testMethod){
-			// simplest method, but doesn't perform well in practice, especially for large models
-			case RandomWalk:
-				eqOracle = new RandomWalkEQOracle<>(chanceOfResetting, numberOfSymbols, true, new Random(123456l), sul);
-				break;
-			// Other methods are somewhat smarter than random testing: state coverage, trying to distinguish states, etc.
-			case WMethod:
-				eqOracle = new WMethodEQOracle.MealyWMethodEQOracle<>(3, sulOracle);
-				break;
-			case WpMethod:
-				eqOracle = new WpMethodEQOracle.MealyWpMethodEQOracle<>(3, sulOracle);
-				break;
-			default:
-				throw new RuntimeException("No test oracle selected!");
-		}
+	public static boolean saveAllHypotheses = true;
+	// for random walk, the chance to do a reset after an input and the number of
+	// inputs to test before accepting a hypothesis
+	public static double chanceOfResetting = 0.1;
+	public static int numberOfSymbols = 300;
 
-		// Choosing a learner
-		LearningAlgorithm<MealyMachine<?, String, ?, String>, String, Word<String>> learner = null;
-		switch (learningAlgorithm){
+	//*****************************************//
+	// Predefined learning and testing methods //
+	//*****************************************//
+	// The learning algorithms. LStar is the basic algorithm, TTT performs much faster
+	// but is a bit more inaccurate and produces more intermediate hypotheses, so test well)
+	public enum LearningMethod { LStar, RivestSchapire, TTT, KearnsVazirani }
+	// The testing algorithms. Random walk is the simplest, but performs badly on large models:
+	// the chance of hitting a erroneous long trace is very small. WMethod and WpMethod are
+	// smarter. UserQueries asks the user for which inputs to try as counter-example: have a
+	// look at the hypothesis, and try to think of one
+	public enum TestingMethod { RandomWalk, WMethod, WpMethod, UserQueries }
+
+	/**
+	 * Example of how to call a learner in a simple way with this class. Learns the ExampleSUL.
+	 * @param args
+	 * @throws IOException
+	 */
+	public static void main(String [] args) throws IOException {
+		// Load the actual SUL-class
+		// For a SUL over a socket, use the SocketSUL-class
+		// You can also program an own SUL-class if you extend SUL<String,String> (or SUL<S,T> in
+		// general, with S and T the input and output types - but this class assumes strings)
+		SUL<String,String> sul = new ExampleSUL();
+
+		// the input alphabet
+		Collection<String> inputAlphabet = ImmutableSet.of("a", "b", "c");
+
+		try {
+			// runControlledExperiment for detailed statistics, runSimpleExperiment for just the result
+			runControlledExperiment(sul, LearningMethod.LStar, TestingMethod.RandomWalk, inputAlphabet);
+		} finally {
+			if (sul instanceof AutoCloseable) {
+				try {
+					((AutoCloseable) sul).close();
+				} catch (Exception exception) {
+					// should not happen
+				}
+			}
+		}
+	}
+
+	public static LearningAlgorithm<MealyMachine<?, String, ?, String>, String, Word<String>> loadLearner(
+			LearningMethod learningMethod, MealyMembershipOracle<String,String> sulOracle, Alphabet<String> alphabet) {
+		switch (learningMethod){
 			case LStar:
-				learner = new ExtensibleLStarMealy<>(inputAlphabet, sulOracle, Lists.<Word<String>>newArrayList(), ObservationTableCEXHandlers.CLASSIC_LSTAR, ClosingStrategies.CLOSE_SHORTEST);
-				break;
+				return new ExtensibleLStarMealy<String, String>(alphabet, sulOracle, Lists.<Word<String>>newArrayList(), ObservationTableCEXHandlers.CLASSIC_LSTAR, ClosingStrategies.CLOSE_SHORTEST);
 			case RivestSchapire:
-				learner = new ExtensibleLStarMealy<>(inputAlphabet, sulOracle, Lists.<Word<String>>newArrayList(), ObservationTableCEXHandlers.RIVEST_SCHAPIRE, ClosingStrategies.CLOSE_SHORTEST);
-				break;
+				return new ExtensibleLStarMealy<String, String>(alphabet, sulOracle, Lists.<Word<String>>newArrayList(), ObservationTableCEXHandlers.RIVEST_SCHAPIRE, ClosingStrategies.CLOSE_SHORTEST);
 			case TTT:
-				learner = new TTTLearnerMealy<>(inputAlphabet, sulOracle, AcexAnalyzers.LINEAR_FWD);
-				break;
+				return new TTTLearnerMealy<String, String>(alphabet, sulOracle, AcexAnalyzers.LINEAR_FWD);
 			case KearnsVazirani:
-				learner = new KearnsVaziraniMealy<>(inputAlphabet, sulOracle, false, AcexAnalyzers.LINEAR_FWD);
-				break;
+				return new KearnsVaziraniMealy<String, String>(alphabet, sulOracle, false, AcexAnalyzers.LINEAR_FWD);
 			default:
 				throw new RuntimeException("No learner selected");
 		}
-		
-		// Running the actual experiments!
-		if (runControlledExperiment) {
-			runControlledExperiment(learner, eqOracle, nrSymbols, nrResets, inputAlphabet);
-		} else {
-			runSimpleExperiment(learner, eqOracle, inputAlphabet);
+	}
+
+	public static EquivalenceOracle<MealyMachine<?, String, ?, String>, String, Word<String>> loadTester(
+			TestingMethod testMethod, SUL<String,String> sul, MealyMembershipOracle<String,String> sulOracle) {
+		switch (testMethod){
+			// simplest method, but doesn't perform well in practice, especially for large models
+			case RandomWalk:
+				return new RandomWalkEQOracle<>(chanceOfResetting, numberOfSymbols, true, new Random(123456l), sul);
+			// Other methods are somewhat smarter than random testing: state coverage, trying to distinguish states, etc.
+			case WMethod:
+				return new WMethodEQOracle.MealyWMethodEQOracle<>(3, sulOracle);
+			case WpMethod:
+				return new WpMethodEQOracle.MealyWpMethodEQOracle<>(3, sulOracle);
+			case UserQueries:
+				return new UserEQOracle(sul);
+			default:
+				throw new RuntimeException("No test oracle selected!");
 		}
 	}
-	
+
 	/**
 	 * Simple example of running a learning experiment
 	 * @param learner Learning algorithm, wrapping the SUL
@@ -173,10 +148,30 @@ public class Main {
 			LearningAlgorithm<MealyMachine<?, String, ?, String>, String, Word<String>> learner,
 			EquivalenceOracle<MealyMachine<?, String, ?, String>, String, Word<String>> eqOracle,
 			Alphabet<String> alphabet) throws IOException {
-		MealyExperiment<String, String> experiment = new MealyExperiment<String, String>(learner, eqOracle, alphabet);
+		MealyExperiment<String, String> experiment
+				= new MealyExperiment<String, String>(learner, eqOracle, alphabet);
 		experiment.run();
 		System.out.println("Ran " + experiment.getRounds().getCount() + " rounds");
 		produceOutput(FINAL_MODEL_FILENAME, experiment.getFinalHypothesis(), alphabet, true);
+	}
+
+	/**
+	 * Simple example of running a learning experiment
+	 * @param sul Direct access to SUL
+	 * @param learningMethod One of the default learning methods from this class
+	 * @param testingMethod One of the default testing methods from this class
+	 * @param alphabet Input alphabet
+	 * @throws IOException if the result cannot be written
+	 */
+	public static void runSimpleExperiment (
+			SUL<String,String> sul,
+			LearningMethod learningMethod,
+			TestingMethod testingMethod,
+			Collection<String> alphabet
+			) throws IOException {
+		Alphabet<String> learlibAlphabet = new SimpleAlphabet<String>(alphabet);
+		LearningSetup learningSetup = new LearningSetup(sul, learningMethod, testingMethod, learlibAlphabet);
+		runSimpleExperiment(learningSetup.learner, learningSetup.eqOracle, learlibAlphabet);
 	}
 	
 	/**
@@ -194,7 +189,6 @@ public class Main {
 			EquivalenceOracle<MealyMachine<?, String, ?, String>, String, Word<String>> eqOracle,
 			Counter nrSymbols, Counter nrResets,
 			Alphabet<String> alphabet) throws IOException {
-		
 		try {
 			// prepare some counters for printing statistics
 			int stage = 0;
@@ -208,7 +202,7 @@ public class Main {
 				if(saveAllHypotheses) {
 					String outputFilename = INTERMEDIATE_HYPOTHESIS_FILENAME + stage;
 					produceOutput(outputFilename, learner.getHypothesisModel(), alphabet, false);
-					System.out.println("model size" + learner.getHypothesisModel().getStates().size());
+					System.out.println("model size " + learner.getHypothesisModel().getStates().size());
 				}
 	
 				// Print statistics
@@ -246,11 +240,32 @@ public class Main {
 			}
 		} catch (Exception e) {
 			String errorHypName = "hyp.before.crash.dot";
-			produceOutput(errorHypName, learner.getHypothesisModel(), inputAlphabet, true);
+			produceOutput(errorHypName, learner.getHypothesisModel(), alphabet, true);
 			throw e;
 		}
 	}
-	
+
+	/**
+	 * More detailed example of running a learning experiment. Starts learning, and then loops testing,
+	 * and if counterexamples are found, refining again. Also prints some statistics about the experiment
+	 * @param sul Direct access to SUL
+	 * @param learningMethod One of the default learning methods from this class
+	 * @param testingMethod One of the default testing methods from this class
+	 * @param alphabet Input alphabet
+	 * @param alphabet Input alphabet
+	 * @throws IOException
+	 */
+	public static void runControlledExperiment(
+			SUL<String,String> sul,
+			LearningMethod learningMethod,
+			TestingMethod testingMethod,
+			Collection<String> alphabet
+		) throws IOException {
+		Alphabet<String> learnlibAlphabet = new SimpleAlphabet<String>(alphabet);
+		LearningSetup learningSetup = new LearningSetup(sul, learningMethod, testingMethod, learnlibAlphabet);
+		runControlledExperiment(learningSetup.learner, learningSetup.eqOracle, learningSetup.nrSymbols, learningSetup.nrResets, learnlibAlphabet);
+	}
+
 	/**
 	 * Produces a dot-file and a PDF (if graphviz is installed)
 	 * @param fileName filename without extension - will be used for the .dot and .pdf
@@ -272,5 +287,35 @@ public class Main {
 			}
 		}
 		dotWriter.close();
+	}
+
+	/**
+	 * Helper class to configure a learning and equivalence oracle. Tell it which learning and testing method you
+	 * want, and it produces the corresponding oracles (and counters for statistics) as attributes.
+	 */
+	public static class LearningSetup {
+		public final EquivalenceOracle<MealyMachine<?, String, ?, String>, String, Word<String>> eqOracle;
+		public final LearningAlgorithm<MealyMachine<?, String, ?, String>, String, Word<String>> learner;
+		public final Counter nrSymbols, nrResets;
+
+		public LearningSetup(SUL<String,String> sul, LearningMethod learningMethod, TestingMethod testingMethod, Alphabet<String> alphabet) {
+			// Wrap the SUL in a detector for non-determinism
+			SUL<String,String> nonDetSul = new NonDeterminismCheckingSUL<String,String>(sul);
+			// Wrap the SUL in counters for symbols/resets, so that we can record some statistics
+			SymbolCounterSUL<String, String> symbolCounterSul = new SymbolCounterSUL<>("symbol counter", nonDetSul);
+			ResetCounterSUL<String, String> resetCounterSul = new ResetCounterSUL<>("reset counter", symbolCounterSul);
+			nrSymbols = symbolCounterSul.getStatisticalData();
+			nrResets = resetCounterSul.getStatisticalData();
+			// we should use the sul only through those wrappers
+			sul = resetCounterSul;
+			// Most testing/learning-algorithms want a membership-oracle instead of a SUL directly
+			MealyMembershipOracle<String,String> sulOracle = new SULOracle<>(sul);
+
+			// Choosing an equivalence oracle
+			eqOracle = loadTester(testingMethod, sul, sulOracle);
+
+			// Choosing a learner
+			learner = loadLearner(learningMethod, sulOracle, alphabet);
+		}
 	}
 }
