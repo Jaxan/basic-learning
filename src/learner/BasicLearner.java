@@ -46,7 +46,7 @@ import de.learnlib.statistics.Counter;
  * 
  * @author Ramon Janssen
  */
-public class Main {
+public class BasicLearner {
 	//*******************************//
  	// Learning settings (hardcoded) //
 	//*******************************//
