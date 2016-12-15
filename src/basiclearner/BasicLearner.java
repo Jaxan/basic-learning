@@ -46,33 +46,48 @@ import de.learnlib.statistics.Counter;
  * @author Ramon Janssen
  */
 public class BasicLearner {
-	//*******************************//
- 	// Learning settings (hardcoded) //
-	//*******************************//
-	// name to give to the resulting .dot-file and .pdf-file (extensions are added automatically)
+	//***********************************************************************************//
+ 	// Learning settings (hardcoded, simply set to a different value to change learning) //
+	//***********************************************************************************//
+	/**
+	 * name to give to the resulting .dot-file and .pdf-file (extensions are added automatically)
+	 */
 	public static String
 			FINAL_MODEL_FILENAME = "learnedModel",
 			INTERMEDIATE_HYPOTHESIS_FILENAME = "hypothesis";
-	// For controlled experiments only: store every hypotheses as a file. Useful for 'debugging'
-	// if the learner does not terminate (hint: the TTT-algorithm produces many hypotheses).
+	/**
+	 * For controlled experiments only: store every hypotheses as a file. Useful for 'debugging'
+	 * if the learner does not terminate (hint: the TTT-algorithm produces many hypotheses).
+	 */
 	public static boolean saveAllHypotheses = true;
-	// for random walk, the chance to do a reset after an input and the number of
-	// inputs to test before accepting a hypothesis
+	/**
+	 * For random walk, the chance to reset after every input
+	 */
 	public static double chanceOfResetting = 0.1;
+	/**
+	 * For random walk, the number of symbols that is tested in total (divided over multiple traces).
+	 */
 	public static int numberOfSymbols = 300;
+	/**
+	 * MaxDepth-parameter for W-method and Wp-method. Typically not larger than 3. Decrease for quicker runs.
+	 */
+	public static int maxDepth = 2;
 
 	//*****************************************//
 	// Predefined learning and testing methods //
 	//*****************************************//
-	// The learning algorithms. LStar is the basic algorithm, TTT performs much faster
-	// but is a bit more inaccurate and produces more intermediate hypotheses, so test well)
+	/**
+	 * The learning algorithms. LStar is the basic algorithm, TTT performs much faster
+	 * but is a bit more inaccurate and produces more intermediate hypotheses, so test well)
+	 */
 	public enum LearningMethod { LStar, RivestSchapire, TTT, KearnsVazirani }
-	// The testing algorithms. Random walk is the simplest, but performs badly on large models:
-	// the chance of hitting a erroneous long trace is very small. WMethod and WpMethod are
-	// smarter. UserQueries asks the user for which inputs to try as counter-example: have a
-	// look at the hypothesis, and try to think of one
+	/**
+	 * The testing algorithms. Random walk is the simplest, but performs badly on large models:
+	 * the chance of hitting a erroneous long trace is very small. WMethod and WpMethod are
+	 * smarter. UserQueries asks the user for which inputs to try as counter-example: have a
+	 * look at the hypothesis, and try to think of one
+	 */
 	public enum TestingMethod { RandomWalk, WMethod, WpMethod, UserQueries }
-
 
 	public static LearningAlgorithm<MealyMachine<?, String, ?, String>, String, Word<String>> loadLearner(
 			LearningMethod learningMethod, MealyMembershipOracle<String,String> sulOracle, Alphabet<String> alphabet) {
@@ -98,9 +113,9 @@ public class BasicLearner {
 				return new RandomWalkEQOracle<>(chanceOfResetting, numberOfSymbols, true, new Random(123456l), sul);
 			// Other methods are somewhat smarter than random testing: state coverage, trying to distinguish states, etc.
 			case WMethod:
-				return new WMethodEQOracle.MealyWMethodEQOracle<>(3, sulOracle);
+				return new WMethodEQOracle.MealyWMethodEQOracle<>(maxDepth, sulOracle);
 			case WpMethod:
-				return new WpMethodEQOracle.MealyWpMethodEQOracle<>(3, sulOracle);
+				return new WpMethodEQOracle.MealyWpMethodEQOracle<>(maxDepth, sulOracle);
 			case UserQueries:
 				return new UserEQOracle(sul);
 			default:
