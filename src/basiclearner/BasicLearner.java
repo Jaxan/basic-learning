@@ -63,15 +63,15 @@ public class BasicLearner {
 	/**
 	 * For random walk, the chance to reset after every input
 	 */
-	public static double chanceOfResetting = 0.1;
+	public static double randomWalk_chanceOfResetting = 0.1;
 	/**
 	 * For random walk, the number of symbols that is tested in total (divided over multiple traces).
 	 */
-	public static int numberOfSymbols = 300;
+	public static int randomWalk_numberOfSymbols = 300;
 	/**
 	 * MaxDepth-parameter for W-method and Wp-method. Typically not larger than 3. Decrease for quicker runs.
 	 */
-	public static int maxDepth = 2;
+	public static int w_wp_methods_maxDepth = 2;
 
 	//*****************************************//
 	// Predefined learning and testing methods //
@@ -110,12 +110,12 @@ public class BasicLearner {
 		switch (testMethod){
 			// simplest method, but doesn't perform well in practice, especially for large models
 			case RandomWalk:
-				return new RandomWalkEQOracle<>(chanceOfResetting, numberOfSymbols, true, new Random(123456l), sul);
+				return new RandomWalkEQOracle<>(randomWalk_chanceOfResetting, randomWalk_numberOfSymbols, true, new Random(123456l), sul);
 			// Other methods are somewhat smarter than random testing: state coverage, trying to distinguish states, etc.
 			case WMethod:
-				return new WMethodEQOracle.MealyWMethodEQOracle<>(maxDepth, sulOracle);
+				return new WMethodEQOracle.MealyWMethodEQOracle<>(w_wp_methods_maxDepth, sulOracle);
 			case WpMethod:
-				return new WpMethodEQOracle.MealyWpMethodEQOracle<>(maxDepth, sulOracle);
+				return new WpMethodEQOracle.MealyWpMethodEQOracle<>(w_wp_methods_maxDepth, sulOracle);
 			case UserQueries:
 				return new UserEQOracle(sul);
 			default:
