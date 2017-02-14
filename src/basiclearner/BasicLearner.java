@@ -177,8 +177,13 @@ public class BasicLearner {
 			Alphabet<String> alphabet) throws IOException {
 		try {
 			// prepare some counters for printing statistics
-			int stage = 0;
-			long lastNrResetsValue = 0, lastNrSymbolsValue = 0;
+			int iteration = 1;
+			long lastNrLearnQueries = 0, lastNrLearnSymbols = 0, 
+				 lastNrTestQueries = 0, lastNrTestSymbols = 0,
+				 currNrLearnQueries = 0, currNrLearnSymbols = 0,
+				 currNrTestQueries = 0, currNrTestSymbols = 0,
+				 totalNrLearnQueries = 0, totalNrLearnSymbols = 0,
+				 totalNrTestQueries = 0, totalNrTestSymbols = 0;
 			
 			// start the actual learning
 			learner.startLearning();
@@ -186,31 +191,49 @@ public class BasicLearner {
 			while(true) {
 				// store hypothesis as file
 				if(saveAllHypotheses) {
-					String outputFilename = INTERMEDIATE_HYPOTHESIS_FILENAME + stage;
+					String outputFilename = INTERMEDIATE_HYPOTHESIS_FILENAME + iteration;
 					produceOutput(outputFilename, learner.getHypothesisModel(), alphabet, false);
-					System.out.println("model size " + learner.getHypothesisModel().getStates().size());
 				}
-	
-				// Print statistics
-				System.out.println(stage + ": " + Calendar.getInstance().getTime());
-				// Log number of queries/symbols
-				System.out.println("Hypothesis size: " + learner.getHypothesisModel().size() + " states");
-				long roundResets = nrResets.getCount() - lastNrResetsValue, roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
-				System.out.println("learning queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
-						+ "(" + roundResets + "/" + roundSymbols + " this learning round)");
-				lastNrResetsValue = nrResets.getCount();
-				lastNrSymbolsValue = nrSymbols.getCount();
 				
-				// Search for CE
+				// Calculate number of Learning queries/symbols
+				totalNrLearnQueries = nrResets.getCount() - totalNrTestQueries;
+				totalNrLearnSymbols = nrSymbols.getCount() - totalNrTestSymbols;
+				currNrLearnQueries = totalNrLearnQueries - lastNrLearnQueries;
+				currNrLearnSymbols = totalNrLearnSymbols - lastNrLearnSymbols;
+				
+				// Search for Counter Example
 				DefaultQuery<String, Word<String>> ce = eqOracle.findCounterExample(learner.getHypothesisModel(), alphabet);
 				
-				// Log number of queries/symbols
-				roundResets = nrResets.getCount() - lastNrResetsValue;
-				roundSymbols = nrSymbols.getCount() - lastNrSymbolsValue;
-				System.out.println("testing queries/symbols: " + nrResets.getCount() + "/" + nrSymbols.getCount()
-						+ "(" + roundResets + "/" + roundSymbols + " this testing round)");
-				lastNrResetsValue = nrResets.getCount();
-				lastNrSymbolsValue = nrSymbols.getCount();
+				// Calculate number of Testing queries/symbols
+				totalNrTestQueries = nrResets.getCount() - totalNrLearnQueries;
+				totalNrTestSymbols = nrSymbols.getCount() - totalNrLearnSymbols;
+				currNrTestQueries = totalNrTestQueries - lastNrTestQueries;
+				currNrTestSymbols = totalNrTestSymbols - lastNrTestSymbols;
+				
+				// set up counters for next iteration
+				lastNrLearnQueries = currNrLearnQueries;
+				lastNrLearnSymbols = currNrLearnSymbols;
+				lastNrTestQueries = currNrTestQueries;
+				lastNrTestSymbols = currNrTestSymbols;
+				
+				// Print statistics
+				String leftAlignFormat = "| %-14s | %-7d | %-7d |%n";
+				String tableHeaderIter = "| Iteration %-4d | Queries | Tokens  |%n";				
+				System.out.println("Iteration " + iteration + ": " + Calendar.getInstance().getTime());
+				System.out.println("Hypothesis size: " + learner.getHypothesisModel().size() + " states");
+				System.out.format("+----------------+-------------------+%n");
+				System.out.format(tableHeaderIter, iteration);
+				System.out.format("+----------------+---------+---------+%n");
+				System.out.format(leftAlignFormat, "Learning", currNrLearnQueries, currNrLearnSymbols);
+				System.out.format(leftAlignFormat, "Testing", currNrTestQueries, currNrTestSymbols);
+				System.out.format("+----------------+---------+---------+%n");
+				System.out.println();
+				System.out.format("+----------------+-------------------+%n");
+				System.out.format("| Total          | Queries | Tokens  |%n");
+				System.out.format("+----------------+---------+---------+%n");
+				System.out.format(leftAlignFormat, "Learning", totalNrLearnQueries, totalNrLearnSymbols);
+				System.out.format(leftAlignFormat, "Testing", totalNrTestQueries, totalNrTestSymbols);
+				System.out.format("+----------------+---------+---------+%n");
 				
 				if(ce == null) {
 					// No counterexample found, stop learning
@@ -220,7 +243,7 @@ public class BasicLearner {
 				} else {
 					// Counterexample found, rinse and repeat
 					System.out.println();
-					stage++;
+					iteration++;
 					learner.refineHypothesis(ce);
 				}
 			}
